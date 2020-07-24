@@ -1,3 +1,10 @@
+# stuff from elsewhere
+*.tar
+*.json
+TTS/
+*.wav
+tmp/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
