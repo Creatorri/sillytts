@@ -4,6 +4,7 @@
 TTS/
 *.wav
 tmp/
+scale_stats.npy
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
