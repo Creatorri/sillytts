@@ -249,7 +249,9 @@ def speaksents(ttsmodel, sents, out, workers):
 
 
 def wav2mp3(out):
-    Audiosegment.from_wav(out+'.wav').export(out+'.mp3',format='mp3')
+    AudioSegment.from_wav(out+'.wav').export(out+'.mp3',format='mp3')
+    os.remove(out+'.wav')
+    return
 
 
 # In[15]:
