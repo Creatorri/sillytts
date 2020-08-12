@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 # coding: utf-8
 
 # # Mozilla TTS on CPU Real-Time Speech Synthesis 
@@ -218,7 +217,7 @@ def readfromfile(name):
 
 def concat_sents(wav1,wav2):
     if not os.path.isfile('sil.wav'):
-        AudioSegment.silence(duration=800)
+        AudioSegment.silence(duration=800).export('sil.wav',format='wav')
     sil = readfromfile('sil.wav')
     return np.concatenate((x,sil,y),axis=None)
 
