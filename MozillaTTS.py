@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 # coding: utf-8
 
 # # Mozilla TTS on CPU Real-Time Speech Synthesis 
@@ -103,6 +104,7 @@ class TTSModel:
         self.model.load_state_dict(self.cp['model'])
         if self.use_cuda:
             self.model.cuda()
+        self.model.train(False)
         self.model.eval()
         # set model stepsize
         if 'r' in self.cp:
@@ -115,6 +117,7 @@ class TTSModel:
         #ap_vocoder = AudioProcessor(**vocoder_config['audio'])    
         if use_cuda:
             self.vocoder_model.cuda()
+        self.vocoder_model.train(False)
         self.vocoder_model.eval()
         #get sample rate
         self.sample_rate = self.ap.sample_rate
@@ -215,11 +218,14 @@ def readfromfile(name):
 # In[12]:
 
 
-def concat_sents(wav1,wav2):
-    if not os.path.isfile('sil.wav'):
-        AudioSegment.silence(duration=800).export('sil.wav',format='wav')
-    sil = readfromfile('sil.wav')
-    return np.concatenate((x,sil,y),axis=None)
+def collectparts(nparts,out,duration):
+    sil = AudioSegment.silent(duration=duration)
+    acc = AudioSegment.silent()
+    for i in range(nparts):
+        acc = acc + sil + AudioSegment.from_wav(out+'part'+str(i)+'.wav')
+        os.remove(out+'part'+str(i))
+    acc.export(out+'.mp3',format='mp3')
+    return
 
 
 # In[13]:
@@ -228,7 +234,7 @@ def concat_sents(wav1,wav2):
 import concurrent.futures
 import os.path
 
-def speaksents(ttsmodel, sents, out, workers):
+def speaksents(ttsmodel, sents, out, workers, duration):
     def speak(sent):
         return ttsmodel.simpletts(sent)
     def nspeak(i):
@@ -237,7 +243,10 @@ def speaksents(ttsmodel, sents, out, workers):
     with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
         future = executor.map(speak, sents)
         #future = executor.map(nspeak, range(len(sents)))
-        stuff = reduce(concat_sents,future)
+        if not os.path.isfile('sil.wav'):
+            AudioSegment.silent(duration=duration).export('sil.wav',format='wav')
+        sil = readfromfile('sil.wav')
+        stuff = reduce(lambda x,y: np.concatenate((x,sil,y),axis=None),future)
         del future
         writetofile(ttsmodel.sample_rate, out+'.wav', stuff)
         del stuff
@@ -248,58 +257,52 @@ def speaksents(ttsmodel, sents, out, workers):
 # In[14]:
 
 
-def wav2mp3(out):
-    AudioSegment.from_wav(out+'.wav').export(out+'.mp3',format='mp3')
-    os.remove(out+'.wav')
-    return
-
-
-# In[15]:
-
-
-def speaktofile(words,out,workers,ttsmodel):
+def readtofile(filename,out,workers=2,ttsmodel=None,partsize=100,duration=800):
     t_0 = time.time()
+    print('reading file')
+    file = open(filename,"r")
+    words = file.read()
+    file.close()
     initmodel = ttsmodel is None
     if initmodel:
         print('loading model')
         ttsmodel = TTSModel("tts_model.pth.tar","config.json","vocoder_model.pth.tar","config_vocoder.json",False,False)
     print('processing')
     sents = preprocess(words)
-    print('reading '+str(len(sents))+' sentences')
+    parts = []
+    km = 0
+    while km < len(sents):
+        k = km
+        km = min(km + partsize,len(sents))
+        parts.append(sents[k:km])
+    print('reading '+str(len(sents))+' sentences in '+str(len(parts))+' parts')
     t_1 = time.time()
-    speaksents(ttsmodel, sents, out, workers)
+    t_i = t_1
+    for i, part in enumerate(parts):
+        speaksents(ttsmodel, part, out+'part'+str(i),workers,duration)
+        print('part '+str(i)+' took '+str(math.ceil((time.time()-t_i)/60))+' minutes')
+        t_i = time.time()
     print('reading took '+str((time.time()-t_1)/(60*60))+' h')
     if initmodel:
         del ttsmodel
     del sents
+    print('collecting parts')
+    collectparts(len(parts),out,duration)
     gc.collect(2)
-    print('converting to mp3')
-    wav2mp3(out)
     print('done in '+str((time.time()-t_0)/(60*60))+' h')
-    return
-
-
-# In[16]:
-
-
-def readtofile(filename,out,workers=2,ttsmodel=None):
-    file = open(filename,"r")
-    words = file.read()
-    file.close()
-    speaktofile(words,out,workers,ttsmodel)
     return
 
 
 # ## Run it!
 
-# In[17]:
+# In[15]:
 
 
 #from google.colab import drive
 #drive.mount('/content/gdrive')
 
 
-# In[ ]:
+# In[15]:
 
 
 readtofile("BeyondTheDoor.txt",'beyond')
